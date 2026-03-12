@@ -25,6 +25,10 @@ export default function HomeDashboard() {
   const [aiAnalysisCount, setAiAnalysisCount] = useState<number | string>('...');
   const [appointmentsCount, setAppointmentsCount] = useState<number | string>('...');
 
+  // State for static lists to allow removal
+  const [urgentCasesList, setUrgentCasesList] = useState(urgentCases);
+  const [recentStudiesList, setRecentStudiesList] = useState(recentStudies);
+
   useEffect(() => {
     // Get logged-in user from localStorage or fallback to 1 
     const storedUser = localStorage.getItem('user');
@@ -180,8 +184,8 @@ export default function HomeDashboard() {
             <ActionCard
               icon={<FileText className="w-6 h-6" />}
               title="Reports"
-              description="Create & edit reports"
-              onClick={() => navigate('/report/1')}
+              description="View AI scan reports"
+              onClick={() => navigate('/reports')}
               gradient="from-teal-600 to-green-600"
             />
           </div>
@@ -196,7 +200,7 @@ export default function HomeDashboard() {
             </div>
 
             <div className="space-y-4">
-              {urgentCases.map((case_) => (
+              {urgentCasesList.map((case_) => (
                 <div
                   key={case_.id}
                   onClick={() => navigate(`/ai-results/${case_.id}`)}
@@ -236,7 +240,20 @@ export default function HomeDashboard() {
                       <Clock className="w-4 h-4" />
                       <span className="text-xs">{case_.time}</span>
                     </div>
-                    <button className="text-blue-600 text-sm font-semibold hover:underline">Review Now</button>
+                    <div className="flex items-center gap-4">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm('Are you sure you want to remove this urgent case?')) {
+                            setUrgentCasesList(prev => prev.filter(c => c.id !== case_.id));
+                          }
+                        }}
+                        className="text-red-500 text-sm font-semibold hover:underline"
+                      >
+                        Remove
+                      </button>
+                      <button className="text-blue-600 text-sm font-semibold hover:underline">Review Now</button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -256,7 +273,7 @@ export default function HomeDashboard() {
             </div>
 
             <div className="space-y-3">
-              {recentStudies.map((study) => (
+              {recentStudiesList.map((study) => (
                 <div
                   key={study.id}
                   onClick={() => navigate(`/studies/${study.id}`)}
@@ -270,12 +287,25 @@ export default function HomeDashboard() {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-gray-500">{study.date}</span>
-                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${study.status === 'Pending Review'
-                      ? 'bg-yellow-100 text-yellow-700'
-                      : 'bg-green-100 text-green-700'
-                      }`}>
-                      {study.status}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${study.status === 'Pending Review'
+                        ? 'bg-yellow-100 text-yellow-700'
+                        : 'bg-green-100 text-green-700'
+                        }`}>
+                        {study.status}
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm('Are you sure you want to remove this recent study?')) {
+                            setRecentStudiesList(prev => prev.filter(s => s.id !== study.id));
+                          }
+                        }}
+                        className="text-red-500 text-xs font-semibold hover:underline"
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}

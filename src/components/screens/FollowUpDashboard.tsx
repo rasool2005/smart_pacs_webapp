@@ -38,6 +38,9 @@ export default function FollowUpDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // Make static follow-up required list a state so it can be deleted
+  const [followUpList, setFollowUpList] = useState(followUpRequired);
+
   useEffect(() => {
     const fetchUserStudies = async () => {
       try {
@@ -166,10 +169,34 @@ export default function FollowUpDashboard() {
                       </h3>
                       <p className="text-gray-600">{study.test_type || study.study_type}</p>
                     </div>
-                    <span className={`px-4 py-2 text-sm font-bold rounded-xl ${study.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
-                      }`}>
-                      {study.status ? study.status.charAt(0).toUpperCase() + study.status.slice(1) : 'Pending'}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className={`px-4 py-2 text-sm font-bold rounded-xl ${study.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                        }`}>
+                        {study.status ? study.status.charAt(0).toUpperCase() + study.status.slice(1) : 'Pending'}
+                      </span>
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (window.confirm('Are you sure you want to remove this appointment?')) {
+                            // Attempt to delete from backend if the endpoint supports it (placeholder)
+                            try {
+                              await fetch(`http://127.0.0.1:8000/api/user-studies/${study.id}/`, {
+                                method: 'DELETE'
+                              });
+                            } catch (err) {
+                              console.error('Error deleting appointment:', err);
+                            }
+                            setStudies(prev => prev.filter(s => s.id !== study.id));
+                          }
+                        }}
+                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Remove Appointment"
+                      >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-6 text-gray-600">
@@ -194,19 +221,35 @@ export default function FollowUpDashboard() {
         <div>
           <h2 className="text-2xl font-bold text-gray-900 mb-6">Follow-Up Required</h2>
           <div className="space-y-4">
-            {followUpRequired.map((followUp) => (
+            {followUpList.map((followUp) => (
               <div
                 key={followUp.id}
                 className="bg-white rounded-2xl p-6 shadow-sm border-l-4 border-orange-400 hover:shadow-md transition-all"
               >
                 <div className="flex items-start justify-between mb-3">
                   <h3 className="text-xl font-bold text-gray-900">{followUp.patient}</h3>
-                  <span className={`px-3 py-1 rounded-xl text-sm font-bold ${followUp.priority === 'High'
-                    ? 'bg-red-100 text-red-700'
-                    : 'bg-orange-100 text-orange-700'
-                    }`}>
-                    {followUp.priority}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className={`px-3 py-1 rounded-xl text-sm font-bold ${followUp.priority === 'High'
+                      ? 'bg-red-100 text-red-700'
+                      : 'bg-orange-100 text-orange-700'
+                      }`}>
+                      {followUp.priority}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (window.confirm('Are you sure you want to remove this follow-up?')) {
+                          setFollowUpList(prev => prev.filter(f => f.id !== followUp.id));
+                        }
+                      }}
+                      className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Remove Follow-up"
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
 
                 <p className="text-gray-600 mb-4">{followUp.type}</p>

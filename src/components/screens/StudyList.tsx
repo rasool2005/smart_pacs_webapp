@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Search, Filter } from 'lucide-react';
-import BottomNav from '../navigation/BottomNav';
 
 const studies = [
   { id: '1', patient: 'John Doe', mrn: 'MRN-12345', type: 'CT Chest', date: 'Jan 20, 2026', priority: 'High' },
@@ -13,6 +12,7 @@ const studies = [
 export default function StudyList() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
+  const [studiesList, setStudiesList] = useState(studies);
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
@@ -36,7 +36,7 @@ export default function StudyList() {
       </div>
 
       <div className="px-6 space-y-3">
-        {studies.map((study) => (
+        {studiesList.map((study) => (
           <div
             key={study.id}
             onClick={() => navigate(`/studies/${study.id}`)}
@@ -47,23 +47,34 @@ export default function StudyList() {
                 <h3 className="font-bold text-gray-900 mb-1">{study.type}</h3>
                 <p className="text-sm text-gray-600">{study.patient} • {study.mrn}</p>
               </div>
-              <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                study.priority === 'Critical' ? 'bg-red-100 text-red-700' :
+              <span className={`px-2 py-1 rounded-full text-xs font-semibold ${study.priority === 'Critical' ? 'bg-red-100 text-red-700' :
                 study.priority === 'High' ? 'bg-orange-100 text-orange-700' :
-                'bg-gray-100 text-gray-700'
-              }`}>
+                  'bg-gray-100 text-gray-700'
+                }`}>
                 {study.priority}
               </span>
             </div>
             <div className="flex items-center justify-between text-sm">
               <span className="text-gray-600">{study.date}</span>
-              <button className="text-blue-600 font-semibold">View Study</button>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (window.confirm('Are you sure you want to remove this study?')) {
+                      setStudiesList(prev => prev.filter(s => s.id !== study.id));
+                    }
+                  }}
+                  className="text-red-500 font-semibold hover:underline"
+                >
+                  Remove
+                </button>
+                <button className="text-blue-600 font-semibold hover:underline">View Study</button>
+              </div>
             </div>
           </div>
         ))}
       </div>
 
-      <BottomNav />
     </div>
   );
 }

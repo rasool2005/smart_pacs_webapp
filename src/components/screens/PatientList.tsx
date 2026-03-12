@@ -185,15 +185,38 @@ export default function PatientList() {
                     </span>
                   </td>
                   <td className="px-6 py-4">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/patients/${patient.patient_id}`);
-                      }}
-                      className="text-blue-600 font-semibold text-sm hover:underline"
-                    >
-                      View Details
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/patients/${patient.patient_id}`);
+                        }}
+                        className="text-blue-600 font-semibold text-sm hover:underline"
+                      >
+                        View Details
+                      </button>
+                      <span className="text-gray-300">|</span>
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (window.confirm('Are you sure you want to remove this patient?')) {
+                            // Attempt to delete from backend if the endpoint supports it
+                            try {
+                              await fetch(`http://127.0.0.1:8000/api/patients/${patient.patient_id}/`, {
+                                method: 'DELETE'
+                              });
+                            } catch (err) {
+                              console.error('Error deleting patient:', err);
+                            }
+                            // Remove from local state
+                            setPatients(prev => prev.filter(p => p.patient_id !== patient.patient_id));
+                          }
+                        }}
+                        className="text-red-600 font-semibold text-sm hover:underline"
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

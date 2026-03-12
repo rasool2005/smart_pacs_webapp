@@ -77,7 +77,7 @@ export default function ProfileScreen() {
       {/* Header with Profile Info */}
       <div className="bg-gradient-to-br from-blue-600 to-blue-700 px-6 pt-12 pb-12 relative">
         <button
-          onClick={() => navigate('/home')}
+          onClick={() => navigate(-1)}
           className="absolute top-12 left-6 p-2 text-white hover:bg-white/10 rounded-xl transition-colors"
         >
           <ArrowLeft className="w-6 h-6" />

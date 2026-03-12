@@ -26,6 +26,7 @@ import CTViewer from './components/screens/CTViewer';
 import MRIViewer from './components/screens/MRIViewer';
 import AIResults from './components/screens/AIResults';
 import ReportEditor from './components/screens/ReportEditor';
+import ReportsScreen from './components/screens/ReportsScreen';
 import ShareCase from './components/screens/ShareCase';
 import FollowUpDashboard from './components/screens/FollowUpDashboard';
 import ScheduleAppointment from './components/screens/ScheduleAppointment';
@@ -87,6 +88,7 @@ export default function App() {
         <Route path="/mri-viewer/:id" element={<WebLayout showSidebar={false}><MRIViewer /></WebLayout>} />
         <Route path="/ai-results/:id" element={<WebLayout><AIResults /></WebLayout>} />
         <Route path="/report/:id" element={<WebLayout><ReportEditor /></WebLayout>} />
+        <Route path="/reports" element={<WebLayout><ReportsScreen /></WebLayout>} />
         <Route path="/share-case/:id" element={<WebLayout><ShareCase /></WebLayout>} />
         <Route path="/follow-up" element={<WebLayout><FollowUpDashboard /></WebLayout>} />
         <Route path="/schedule-appointment" element={<WebLayout><ScheduleAppointment /></WebLayout>} />

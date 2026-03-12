@@ -12,12 +12,32 @@ export default function PatientDetails() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Example placeholder studies (we can wire this up later if your backend supports it)
-  const studies = [
-    { id: '1', type: 'CT Chest', date: 'Jan 20, 2026', status: 'Completed' },
-    { id: '2', type: 'X-Ray Spine', date: 'Jan 15, 2026', status: 'Completed' },
-    { id: '3', type: 'MRI Brain', date: 'Jan 10, 2026', status: 'Completed' },
-  ];
+
+  const [scanHistory, setScanHistory] = useState<any[]>([]);
+
+  useEffect(() => {
+    // Load local scan history for this patient
+    if (patientId) {
+      const historyKey = `scanHistory_${patientId}`;
+      const savedHistory = localStorage.getItem(historyKey);
+      if (savedHistory) {
+        try {
+          setScanHistory(JSON.parse(savedHistory));
+        } catch (e) {
+          console.error("Failed to parse scan history", e);
+        }
+      }
+    }
+  }, [patientId]);
+
+  const handleRemoveScan = (e: React.MouseEvent, scanId: string) => {
+    e.stopPropagation(); // prevent navigation
+    if (patientId) {
+      const updatedHistory = scanHistory.filter(scan => scan.id !== scanId);
+      setScanHistory(updatedHistory);
+      localStorage.setItem(`scanHistory_${patientId}`, JSON.stringify(updatedHistory));
+    }
+  };
 
   useEffect(() => {
     const fetchPatientDetails = async () => {
@@ -112,7 +132,7 @@ export default function PatientDetails() {
       <div className="bg-white border-b border-gray-200 px-8 py-6">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate('/patients')}
+            onClick={() => navigate(-1)}
             className="p-2 -ml-2 rounded-xl hover:bg-gray-100 text-gray-600 transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -203,31 +223,57 @@ export default function PatientDetails() {
               </div>
             </div>
 
-            {/* Recent Studies Card */}
+
+            {/* Scan History Card */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
-              <h3 className="text-xl font-bold text-gray-900 mb-6">Recent Studies</h3>
-              <div className="space-y-3">
-                {studies.map((study) => (
-                  <div
-                    key={study.id}
-                    onClick={() => navigate(`/studies/${study.id}`)}
-                    className="bg-gray-50 hover:bg-gray-100 rounded-xl p-4 transition-colors cursor-pointer border border-transparent hover:border-gray-200"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Activity className="w-5 h-5 text-blue-600" />
-                        <div>
-                          <p className="font-semibold text-gray-900">{study.type}</p>
-                          <p className="text-sm text-gray-600">{study.date}</p>
+              <h3 className="text-xl font-bold text-gray-900 mb-6">Scan History</h3>
+              {scanHistory.length > 0 ? (
+                <div className="space-y-3">
+                  {scanHistory.map((scan) => (
+                    <div
+                      key={scan.id}
+                      onClick={() => navigate('/ai-scanner', { state: { pastScan: scan, patientId } })}
+                      className="bg-gray-50 hover:bg-gray-100 rounded-xl p-4 transition-colors cursor-pointer border border-transparent hover:border-gray-200"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-200 flex-shrink-0 border border-gray-200">
+                            {scan.uploadedImage ? (
+                              <img src={scan.uploadedImage} alt="Scan" className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <Activity className="w-6 h-6 text-gray-400" />
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-gray-900">{scan.type}</p>
+                            <p className="text-sm text-gray-600">{scan.date} • {scan.aiResult}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="px-3 py-1 bg-purple-100 text-purple-700 text-xs font-semibold rounded-full border border-purple-200 hidden sm:inline-block">
+                            View Report
+                          </span>
+                          <button
+                            onClick={(e) => handleRemoveScan(e, scan.id)}
+                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Remove from history"
+                          >
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
                         </div>
                       </div>
-                      <span className="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full border border-green-200">
-                        {study.status}
-                      </span>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500 text-sm text-center py-4 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                  No scan history available for this patient.
+                </p>
+              )}
             </div>
           </div>
 
@@ -243,10 +289,17 @@ export default function PatientDetails() {
                   Schedule Appointment
                 </button>
                 <button
-                  onClick={() => navigate(`/report/${patient.id}`)}
-                  className="w-full bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-900 py-3 rounded-xl font-semibold transition-colors"
+                  onClick={() => navigate('/ai-scanner', { state: { patientId, patientName: patient.patient_name } })}
+                  className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2"
                 >
-                  View Report
+                  <Activity className="w-5 h-5" />
+                  AI Scanner
+                </button>
+                <button
+                  onClick={() => console.log('Cancel Appointment clicked')}
+                  className="w-full bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 py-3 rounded-xl font-semibold transition-colors"
+                >
+                  Cancel Schedule
                 </button>
               </div>
             </div>
