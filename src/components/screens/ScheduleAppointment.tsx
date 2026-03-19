@@ -93,13 +93,17 @@ export default function ScheduleAppointment() {
     try {
       const selectedPatient = patients.find(p => String(p.id || p.patient_id) === String(formData.patient));
 
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      const userId = user?.user_id || user?.id || 1;
+
       const payload = {
-        user_id: 1, // Placeholder: Django expected a foreign key to the Doctor/User. Replace with correct logged-in User ID later if needed!
+        user_id: userId,
         patient_name: selectedPatient ? selectedPatient.patient_name : "Unknown",
         study_type: formData.type,
         study_date: formData.date,
         study_time: formData.time,
-        notes: formData.notes
+        note: formData.notes
       };
 
       const response = await fetch('http://127.0.0.1:8000/api/schedule-study/', {

@@ -18,27 +18,36 @@ const recentStudies = [
 export default function HomeDashboard() {
   const navigate = useNavigate();
 
-  // Dynamic state for dashboard stats
+  // State for dashboard stats
   const [patientsCount, setPatientsCount] = useState<number | string>('...');
   const [studiesCount, setStudiesCount] = useState<number | string>('...');
   const [urgentStudiesCount, setUrgentStudiesCount] = useState<number | string>('...');
   const [aiAnalysisCount, setAiAnalysisCount] = useState<number | string>('...');
   const [appointmentsCount, setAppointmentsCount] = useState<number | string>('...');
 
-  // State for static lists to allow removal
-  const [urgentCasesList, setUrgentCasesList] = useState(urgentCases);
-  const [recentStudiesList, setRecentStudiesList] = useState(recentStudies);
+  // State for dynamic lists (Empty by default for a fresh doctor login)
+  const [urgentCasesList, setUrgentCasesList] = useState<any[]>([]);
+  const [recentStudiesList, setRecentStudiesList] = useState<any[]>([]);
 
   useEffect(() => {
-    // Get logged-in user from localStorage or fallback to 1 
+    // Get logged-in user from localStorage
     const storedUser = localStorage.getItem('user');
     const user = storedUser ? JSON.parse(storedUser) : null;
-    const userId = user?.user_id || 1;
+    const userId = user?.user_id || user?.id;
 
-    // Fetch Total Patients
+    if (!userId) {
+      setPatientsCount(0);
+      setStudiesCount(0);
+      setUrgentStudiesCount(0);
+      setAiAnalysisCount(0);
+      setAppointmentsCount(0);
+      return;
+    }
+
+    // Fetch Total Patients for this doctor
     const fetchPatients = async () => {
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/patients/', {
+        const response = await fetch(`http://127.0.0.1:8000/api/patients/?doctor_id=${userId}`, {
           headers: { 'Accept': 'application/json' }
         });
         if (response.ok) {
@@ -50,13 +59,12 @@ export default function HomeDashboard() {
           }
         }
       } catch (err) {
-        console.error('Failed to fetch patients:', err);
-        setPatientsCount(0); // fallback
+        setPatientsCount(0);
       }
     };
     fetchPatients();
 
-    // Fetch user studies (Pending Studies & Appointments)
+    // Fetch user studies (Recent Studies & Appointments)
     const fetchUserStudies = async () => {
       try {
         const response = await fetch('http://127.0.0.1:8000/api/user-studies/', {
@@ -70,12 +78,25 @@ export default function HomeDashboard() {
         if (response.ok) {
           const data = await response.json();
           const studiesList = data.studies || [];
+          
+          // Filter stats
           const pending = studiesList.filter((s: any) => s.status?.toLowerCase().includes('pending'));
           const urgent = studiesList.filter((s: any) => s.priority === 'Critical' || s.priority === 'High' || s.urgent);
 
-          setStudiesCount(pending.length > 0 ? pending.length : (studiesList.length > 0 ? studiesList.length : 0));
+          setStudiesCount(pending.length);
           setUrgentStudiesCount(urgent.length);
           setAppointmentsCount(studiesList.length);
+
+          // Map API studies to "Recent Studies" format
+          const mappedStudies = studiesList.slice(0, 5).map((s: any) => ({
+            id: s.id,
+            patient: s.patient_name || `Patient #${s.patient_id}`,
+            mrn: s.mrn || `MRN-${s.patient_id}`,
+            type: s.test_type || s.study_type || 'General Study',
+            date: s.study_date || s.scheduled_date || 'N/A',
+            status: s.status || 'Pending'
+          }));
+          setRecentStudiesList(mappedStudies);
         } else {
           setStudiesCount(0);
           setUrgentStudiesCount(0);
@@ -83,13 +104,12 @@ export default function HomeDashboard() {
         }
       } catch (err) {
         setStudiesCount(0);
-        setUrgentStudiesCount(0);
         setAppointmentsCount(0);
       }
     };
     fetchUserStudies();
 
-    // Fetch AI Analyses
+    // Fetch AI Analyses & Important Findings
     const fetchAIAnalyses = async () => {
       try {
         const response = await fetch(`http://127.0.0.1:8000/api/get-ai-reports/?user_id=${userId}`, {
@@ -99,6 +119,23 @@ export default function HomeDashboard() {
           const data = await response.json();
           const reportsList = data.reports || data.data || [];
           setAiAnalysisCount(reportsList.length);
+
+          // Populate urgent cases from Critical/High severity AI reports
+          const urgentReports = reportsList
+            .filter((r: any) => r.severity === 'Critical' || r.severity === 'High')
+            .slice(0, 3)
+            .map((r: any) => ({
+              id: r.id,
+              patient: r.patient_name || 'Unknown',
+              age: 'N/A',
+              mrn: r.patient_id ? `MRN-${r.patient_id}` : 'MRN-N/A',
+              type: r.examination_type,
+              aiPriority: r.severity,
+              confidence: Math.round(r.confidence_score * 100),
+              finding: r.finding_name,
+              time: 'New'
+            }));
+          setUrgentCasesList(urgentReports);
         } else {
           setAiAnalysisCount(0);
         }

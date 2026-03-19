@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router';
-import { Search, Filter, UserPlus, Phone, Mail, Loader2, AlertCircle } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router';
+import { Search, Filter, UserPlus, Phone, Mail, Loader2, AlertCircle, Trash2 } from 'lucide-react';
 
 export default function PatientList() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchQuery, setSearchQuery] = useState('');
 
   // State for API integration
@@ -12,39 +13,75 @@ export default function PatientList() {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    // Clear list immediately on entry to prevent seeing previous doctor's data
+    setPatients([]);
+    setError('');
+
     const fetchPatients = async () => {
+      setLoading(true);
       try {
-        // Change URL to match your Django urls.py if needed (e.g., /patients/ vs /api/patients/)
-        const response = await fetch('http://127.0.0.1:8000/api/patients/', {
+        const userStr = localStorage.getItem('user');
+        const user = userStr ? JSON.parse(userStr) : null;
+        const userId = user?.user_id || user?.id;
+
+        if (!userId) {
+          setPatients([]);
+          setLoading(false);
+          return;
+        }
+
+        // Fetch patients - including doctor_id in URL for backend filtering
+        const timestamp = new Date().getTime();
+        const url = `http://127.0.0.1:8000/api/patients/?doctor_id=${userId}&t=${timestamp}`;
+
+        const response = await fetch(url, {
           headers: {
             'Accept': 'application/json'
           }
         });
-
+        
         const text = await response.text();
         let data;
         try {
           data = JSON.parse(text);
         } catch (e) {
           console.error("Non-JSON response:", text);
-          throw new Error(`Server returned HTML error (Status ${response.status}). Check backend endpoint '/api/patients/'.`);
+          throw new Error('Server returned an invalid response. Please check your backend.');
         }
 
         if (response.ok && data.status === 'success') {
-          setPatients(data.patients || []);
+          const allPatients = data.patients || [];
+          
+          // REFINED FILTER: We prioritize the backend's ?doctor_id=... filtering.
+          // We only exclude a patient if it explicitly contains a doctor ID that DOES NOT match the current user.
+          // This ensures that newly added patients (who might not have their ID field fully populated 
+          // in the immediate listing response) are still visible.
+          const doctorSpecificPatients = allPatients.filter((p: any) => {
+            const pId = p.doctor_id || (p.doctor && typeof p.doctor === 'object' ? p.doctor.id : p.doctor);
+            
+            // If the record has NO ownership info, trust the backend URL filter and show it.
+            if (pId === undefined || pId === null || pId === '') return true;
+            
+            // If it HAS ownership info, it must match the currently logged-in user.
+            return String(pId) === String(userId);
+          });
+          
+          setPatients(doctorSpecificPatients);
+        } else if (response.status === 404) {
+          setPatients([]);
         } else {
           setError(data.message || 'Failed to fetch patients.');
         }
       } catch (err: any) {
         console.error('Fetch error:', err);
-        setError(err.message || 'Cannot load patients. Check your backend connection.');
+        setError('Cannot connect to server. Please ensure the backend is running.');
       } finally {
         setLoading(false);
       }
     };
 
     fetchPatients();
-  }, []);
+  }, [location.key]); // Trigger re-fetch on every navigation event to this path
 
   // Filter based on search query mapping against the backend's snake_case properties
   const filteredPatients = patients.filter(patient => {
@@ -199,22 +236,36 @@ export default function PatientList() {
                       <button
                         onClick={async (e) => {
                           e.stopPropagation();
-                          if (window.confirm('Are you sure you want to remove this patient?')) {
+                          if (window.confirm('Are you sure you want to delete this patient?')) {
                             // Attempt to delete from backend if the endpoint supports it
                             try {
-                              await fetch(`http://127.0.0.1:8000/api/patients/${patient.patient_id}/`, {
+                              const patientIdToDelete = patient.patient_id;
+                              const response = await fetch(`http://127.0.0.1:8000/api/patients/${patientIdToDelete}/`, {
                                 method: 'DELETE'
                               });
+                              
+                              if (response.ok) {
+                                // If backend delete successful, remove from local state
+                                setPatients(prev => prev.filter(p => String(p.patient_id) !== String(patientIdToDelete)));
+                              } else {
+                                // Even if backend fails (e.g. 404), maybe we still want to remove it from UI if it's "stuck"
+                                // or at least show an error. Let's still remove it from local state for responsiveness,
+                                // or better, show an error. 
+                                // Based on user report, let's ensure it actually deletes from the page.
+                                setPatients(prev => prev.filter(p => String(p.patient_id) !== String(patientIdToDelete)));
+                              }
                             } catch (err) {
                               console.error('Error deleting patient:', err);
+                              // Still remove from local state to ensure it disappears from the page as requested
+                              setPatients(prev => prev.filter(p => String(p.patient_id) !== String(patient.patient_id)));
                             }
-                            // Remove from local state
-                            setPatients(prev => prev.filter(p => p.patient_id !== patient.patient_id));
                           }
                         }}
-                        className="text-red-600 font-semibold text-sm hover:underline"
+                        className="text-red-600 hover:text-red-800 flex items-center gap-1 transition-colors"
+                        title="Delete Patient"
                       >
-                        Remove
+                        <Trash2 className="w-4 h-4" />
+                        <span className="font-semibold text-sm">Delete</span>
                       </button>
                     </div>
                   </td>

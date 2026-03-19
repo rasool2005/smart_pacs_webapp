@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { ArrowLeft, User, Calendar, Phone, Mail, FileText, Activity, MapPin, Droplet, AlertCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, User, Calendar, Phone, Mail, FileText, Activity, MapPin, Droplet, AlertCircle, Loader2, Trash2 } from 'lucide-react';
 
 export default function PatientDetails() {
   const navigate = useNavigate();
@@ -16,26 +16,56 @@ export default function PatientDetails() {
   const [scanHistory, setScanHistory] = useState<any[]>([]);
 
   useEffect(() => {
-    // Load local scan history for this patient
-    if (patientId) {
-      const historyKey = `scanHistory_${patientId}`;
-      const savedHistory = localStorage.getItem(historyKey);
-      if (savedHistory) {
-        try {
-          setScanHistory(JSON.parse(savedHistory));
-        } catch (e) {
-          console.error("Failed to parse scan history", e);
+    const fetchScanHistory = async () => {
+      if (!patientId) return;
+      try {
+        const response = await fetch(`http://127.0.0.1:8000/api/get-ai-reports/?patient_id=${patientId}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.status === 'success') {
+            const mappedHistory = data.reports.map((r: any) => ({
+              id: String(r.id),
+              date: new Date(r.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+              type: `${r.examination_type} Scan`,
+              aiResult: r.finding_name,
+              uploadedImage: r.scan_image,
+              findings: [{
+                condition: r.finding_name,
+                severity: r.severity.toLowerCase(),
+                confidence: r.confidence_score,
+                location: r.location,
+                description: r.observation
+              }],
+              overallScore: r.confidence_score,
+              scanType: r.examination_type.toLowerCase()
+            }));
+            setScanHistory(mappedHistory);
+          }
         }
+      } catch (err) {
+        console.error("Failed to fetch scan history from server", err);
       }
-    }
+    };
+    fetchScanHistory();
   }, [patientId]);
 
-  const handleRemoveScan = (e: React.MouseEvent, scanId: string) => {
+  const handleDeleteScan = async (e: React.MouseEvent, scanId: string) => {
     e.stopPropagation(); // prevent navigation
-    if (patientId) {
-      const updatedHistory = scanHistory.filter(scan => scan.id !== scanId);
-      setScanHistory(updatedHistory);
-      localStorage.setItem(`scanHistory_${patientId}`, JSON.stringify(updatedHistory));
+    if (window.confirm('Are you sure you want to delete this scan result?')) {
+      try {
+        const response = await fetch(`http://127.0.0.1:8000/api/delete-ai-report/${scanId}/`, {
+          method: 'DELETE'
+        });
+        if (response.ok) {
+          setScanHistory(prev => prev.filter(scan => scan.id !== scanId));
+        } else {
+          // Fallback deletion from UI if server fails (e.g. record manually deleted from DB)
+          setScanHistory(prev => prev.filter(scan => scan.id !== scanId));
+        }
+      } catch (err) {
+        console.error('Error deleting scan:', err);
+        setScanHistory(prev => prev.filter(scan => scan.id !== scanId));
+      }
     }
   };
 
@@ -46,8 +76,15 @@ export default function PatientDetails() {
         // Replace with your actual DRF endpoint for viewing a single patient (usually /patients/<id>/ or similar)
         // E.g: If you have a detailed view, point this there. If not, point it to the generic patient view and it returns a list to filter.
 
-        // Let's assume you have an endpoint like `/api/patients/<id>/` or even just reuse the generic `/api/patients/` and filter manually for now:
-        const response = await fetch('http://127.0.0.1:8000/api/patients/');
+        const userStr = localStorage.getItem('user');
+        const user = userStr ? JSON.parse(userStr) : null;
+        const userId = user?.user_id || user?.id;
+
+        const url = userId 
+          ? `http://127.0.0.1:8000/api/patients/?doctor_id=${userId}`
+          : 'http://127.0.0.1:8000/api/patients/';
+
+        const response = await fetch(url);
         const text = await response.text();
 
         let data;
@@ -58,8 +95,6 @@ export default function PatientDetails() {
         }
 
         if (response.ok && data.status === 'success') {
-          // We filter the list endpoint manually if you don't have a single-patient endpoint yet.
-          // Replace this logic with a direct fetch to `http://127.0.0.1:8000/api/patients/${patientId}/` if you make that API
           const foundPatient = data.patients.find((p: any) => String(p.patient_id) === String(patientId));
 
           if (foundPatient) {
@@ -256,13 +291,11 @@ export default function PatientDetails() {
                             View Report
                           </span>
                           <button
-                            onClick={(e) => handleRemoveScan(e, scan.id)}
+                            onClick={(e) => handleDeleteScan(e, scan.id)}
                             className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Remove from history"
+                            title="Delete from history"
                           >
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
+                            <Trash2 className="w-5 h-5" />
                           </button>
                         </div>
                       </div>

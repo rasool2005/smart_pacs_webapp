@@ -2,34 +2,6 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Calendar, Clock, Plus, ChevronRight, Loader2, AlertCircle } from 'lucide-react';
 
-// Keeping followUpRequired static for now as a placeholder unless there is an API for it
-const followUpRequired = [
-  {
-    id: '1',
-    patient: 'Emily Davis',
-    type: 'CT Abdomen',
-    priority: 'High',
-    note: 'Ground-glass opacity monitoring',
-    dueDate: '2026-02-05'
-  },
-  {
-    id: '2',
-    patient: 'John Doe',
-    type: 'X-Ray Chest',
-    priority: 'Medium',
-    note: 'Post-operative fracture healing assessment',
-    dueDate: '2026-02-10'
-  },
-  {
-    id: '3',
-    patient: 'Sarah Smith',
-    type: 'MRI Brain',
-    priority: 'High',
-    note: 'Hemorrhage follow-up evaluation',
-    dueDate: '2026-02-08'
-  },
-];
-
 export default function FollowUpDashboard() {
   const navigate = useNavigate();
 
@@ -38,20 +10,29 @@ export default function FollowUpDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Make static follow-up required list a state so it can be deleted
-  const [followUpList, setFollowUpList] = useState(followUpRequired);
+  // Follow-up required list is now empty by default for a fresh doctor login
+  const [followUpList, setFollowUpList] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchUserStudies = async () => {
       try {
         setLoading(true);
+        const userStr = localStorage.getItem('user');
+        const user = userStr ? JSON.parse(userStr) : null;
+        const userId = user?.user_id || user?.id;
+
+        if (!userId) {
+          setLoading(false);
+          return;
+        }
+
         const response = await fetch('http://127.0.0.1:8000/api/user-studies/', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json'
           },
-          body: JSON.stringify({ user_id: 1 }) // Placeholder for logged-in user
+          body: JSON.stringify({ user_id: userId })
         });
 
         const text = await response.text();

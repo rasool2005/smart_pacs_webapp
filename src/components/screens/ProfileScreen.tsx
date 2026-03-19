@@ -170,8 +170,10 @@ export default function ProfileScreen() {
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
           <button
             onClick={() => {
-              localStorage.removeItem('user'); // Also good practice
-              navigate('/select-hospital');
+              // Clear everything to ensure a fresh state for the next user
+              localStorage.clear();
+              // Force a full page reload to clear any in-memory state
+              window.location.href = '/#/select-hospital';
             }}
             className="w-full flex items-center justify-between p-4 hover:bg-red-50 active:bg-red-100 transition-colors"
           >

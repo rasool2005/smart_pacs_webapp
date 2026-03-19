@@ -78,6 +78,12 @@ export default function WebSidebar() {
           active={isActive('/patients')}
         />
         <NavItem
+          icon={<Calendar />}
+          label="Studies"
+          path="/studies"
+          active={isActive('/studies')}
+        />
+        <NavItem
           icon={<Activity />}
           label="Follow-ups"
           path="/follow-up"
@@ -116,8 +122,10 @@ export default function WebSidebar() {
       <div className="p-4 border-t border-gray-200">
         <button
           onClick={() => {
-            localStorage.removeItem('user');
-            navigate('/select-hospital');
+            // Clear all data to ensure a fresh start for the next doctor
+            localStorage.clear();
+            // Force a full page reload to clear any in-memory state
+            window.location.href = '/#/select-hospital';
           }}
           className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-600 hover:bg-red-50 transition-all"
         >

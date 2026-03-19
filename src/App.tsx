@@ -54,6 +54,13 @@ export default function App() {
     const timer = setTimeout(() => {
       setShowSplash(false);
     }, 2000);
+
+    // Check if user is already logged in (for fresh page reload support)
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      setIsAuthenticated(true);
+    }
+
     return () => clearTimeout(timer);
   }, []);
 

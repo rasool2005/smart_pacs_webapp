@@ -40,11 +40,14 @@ export default function LoginScreen({ onLogin }: { onLogin: () => void }) {
       }
 
       if (response.ok && data.status === 'success') {
+        // Clear all previous data to ensure a fresh start for the new doctor
+        localStorage.clear();
         // Saving the returned user to localStorage so it can be used across the app
         localStorage.setItem('user', JSON.stringify(data.user));
 
         onLogin();
-        navigate('/home');
+        // Force a full page reload to clear any in-memory state and give a "fresh page" everywhere
+        window.location.href = '/#/home';
       } else {
         // Backend returns {"status": "error", "message": serializer.errors} when validation fails
         if (typeof data.message === 'object') {

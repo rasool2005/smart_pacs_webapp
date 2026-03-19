@@ -50,7 +50,15 @@ export default function AIScannerScreen() {
     const fetchPatientName = async () => {
       if (!patientId) return;
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/patients/');
+        const userStr = localStorage.getItem('user');
+        const user = userStr ? JSON.parse(userStr) : null;
+        const userId = user?.user_id || user?.id;
+
+        const url = userId 
+          ? `http://127.0.0.1:8000/api/patients/?doctor_id=${userId}`
+          : 'http://127.0.0.1:8000/api/patients/';
+
+        const response = await fetch(url);
         if (response.ok) {
           const data = await response.json();
           const found = data.patients?.find((p: any) => String(p.patient_id) === String(patientId));
@@ -400,7 +408,9 @@ export default function AIScannerScreen() {
     try {
       const storedUser = localStorage.getItem('user');
       const user = storedUser ? JSON.parse(storedUser) : null;
-      const userId = user?.user_id || user?.id || 1;
+      const userId = user?.user_id || user?.id;
+
+      if (!userId) return; // Cannot save without a user
 
       const primaryFinding = selectedFindings[0] || {
         condition: 'Normal',
@@ -411,6 +421,7 @@ export default function AIScannerScreen() {
 
       const payload = {
         user_id: userId,
+        patient_id: patientId,
         patient_name: patientName || "Unknown Patient",
         examination_type: scanType.toUpperCase(),
         confidence_score: score,
