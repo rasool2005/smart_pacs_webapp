@@ -4,17 +4,65 @@ import {
   ArrowLeft, User, Key, Shield, Database, HelpCircle,
   FileText, LogOut, Camera, Upload, X
 } from 'lucide-react';
+import { API_BASE_URL } from '../../config';
+import { useEffect } from 'react';
 
 export default function ProfileScreen() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [profileImage, setProfileImage] = useState<string | null>(null);
-  const [showPhotoModal, setShowPhotoModal] = useState(false);
-
-  // Get logged-in user name
+  // Get logged-in user data
   const storedUser = localStorage.getItem('user');
   const user = storedUser ? JSON.parse(storedUser) : null;
   const doctorName = user?.name || 'Dr. Sarah Smith';
+
+  const [profileImage, setProfileImage] = useState<string | null>(() => {
+    if (user?.profile_photo) {
+      if (user.profile_photo.startsWith('http')) return user.profile_photo;
+      const baseUrl = API_BASE_URL.replace('/api', '');
+      return `${baseUrl}${user.profile_photo}`;
+    }
+    return null;
+  });
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
+
+  // Fetch latest info on mount to ensure photo is up to date
+  useEffect(() => {
+    const fetchLatestInfo = async () => {
+      try {
+        const userId = user?.user_id || user?.id;
+        if (!userId) return;
+
+        const response = await fetch(`${API_BASE_URL}/get-personal-info/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({ user_id: userId })
+        });
+
+        const data = await response.json();
+        if (response.ok && data.status === 'success' && data.data) {
+          const info = data.data;
+          if (info.profile_photo) {
+            let photoUrl = info.profile_photo;
+            if (!photoUrl.startsWith('http')) {
+              const baseUrl = API_BASE_URL.replace('/api', '');
+              photoUrl = `${baseUrl}${photoUrl}`;
+            }
+            setProfileImage(photoUrl);
+            
+            // Update localStorage as well
+            const updatedUser = { ...user, profile_photo: info.profile_photo };
+            localStorage.setItem('user', JSON.stringify(updatedUser));
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch latest profile:', err);
+      }
+    };
+    fetchLatestInfo();
+  }, []);
 
   // Generate initials (up to 3 characters)
   const doctorInitials = doctorName
@@ -25,15 +73,60 @@ export default function ProfileScreen() {
     .substring(0, 3)
     .toUpperCase();
 
+  const [isUploading, setIsUploading] = useState(false);
+
+  const uploadPhoto = async (file: File) => {
+    setIsUploading(true);
+    try {
+      const userId = user?.user_id || user?.id;
+      if (!userId) return;
+
+      const formData = new FormData();
+      formData.append('user_id', userId.toString());
+      formData.append('profile_photo', file);
+
+      // Using the same endpoint as PersonalInfo but with FormData
+      const response = await fetch(`${API_BASE_URL}/update-profile/`, {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await response.json();
+      if (response.ok && data.status === 'success') {
+        const info = data.data;
+        if (info?.profile_photo) {
+          let photoUrl = info.profile_photo;
+          if (!photoUrl.startsWith('http')) {
+            const baseUrl = API_BASE_URL.replace('/api', '');
+            photoUrl = `${baseUrl}${photoUrl}`;
+          }
+          setProfileImage(photoUrl);
+          
+          // Update localStorage
+          const updatedUser = { ...user, profile_photo: info.profile_photo };
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+        }
+      }
+    } catch (err) {
+      console.error('Failed to upload photo:', err);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // 1. Show local preview
       const reader = new FileReader();
       reader.onload = (event) => {
         setProfileImage(event.target?.result as string);
         setShowPhotoModal(false);
       };
       reader.readAsDataURL(file);
+
+      // 2. Upload to server
+      uploadPhoto(file);
     }
   };
 
@@ -45,20 +138,41 @@ export default function ProfileScreen() {
     input.onchange = (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (file) {
+        // 1. Show local preview
         const reader = new FileReader();
         reader.onload = (event) => {
           setProfileImage(event.target?.result as string);
           setShowPhotoModal(false);
         };
         reader.readAsDataURL(file);
+
+        // 2. Upload to server
+        uploadPhoto(file);
       }
     };
     input.click();
   };
 
-  const handleRemovePhoto = () => {
-    setProfileImage(null);
-    setShowPhotoModal(false);
+  const handleRemovePhoto = async () => {
+    try {
+      const userId = user?.user_id || user?.id;
+      if (!userId) return;
+
+      const response = await fetch(`${API_BASE_URL}/update-profile/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, profile_photo: null })
+      });
+
+      if (response.ok) {
+        setProfileImage(null);
+        setShowPhotoModal(false);
+        const updatedUser = { ...user, profile_photo: null };
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+      }
+    } catch (err) {
+      console.error('Failed to remove photo:', err);
+    }
   };
 
   const menuItems = [
@@ -88,17 +202,23 @@ export default function ProfileScreen() {
           <div className="relative mb-4">
             <div
               onClick={() => setShowPhotoModal(true)}
-              className="w-24 h-24 rounded-full bg-white flex items-center justify-center shadow-lg cursor-pointer relative overflow-hidden"
+              className="w-24 h-24 rounded-full bg-white flex items-center justify-center shadow-lg cursor-pointer relative overflow-hidden group"
             >
+              {isUploading && (
+                <div className="absolute inset-0 bg-black/20 flex items-center justify-center z-20 backdrop-blur-[1px]">
+                  <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              )}
               {profileImage ? (
                 <img
                   src={profileImage}
                   alt="Profile"
-                  className="w-full h-full object-cover"
+                  className={`w-full h-full object-cover transition-opacity duration-300 ${isUploading ? 'opacity-50' : 'opacity-100'}`}
                 />
               ) : (
                 <div className="text-blue-600 text-3xl font-bold">{doctorInitials}</div>
               )}
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-200" />
             </div>
 
             {/* Camera Button Overlay */}

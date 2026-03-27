@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { Brain, ArrowLeft, Loader2 } from 'lucide-react';
+import { API_BASE_URL } from '../../config';
 
 export default function OTPVerificationScreen() {
   const navigate = useNavigate();
@@ -36,7 +37,7 @@ export default function OTPVerificationScreen() {
     setError('');
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/verify-otp/', {
+      const response = await fetch(`${API_BASE_URL}/verify-otp/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -66,7 +67,7 @@ export default function OTPVerificationScreen() {
     setError('');
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/send-otp/', {
+      const response = await fetch(`${API_BASE_URL}/send-otp/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

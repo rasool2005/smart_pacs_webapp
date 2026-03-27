@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import {
-  ArrowLeft, Upload, Brain, Camera, FileImage,
+  ArrowLeft, Upload, Brain, FileImage,
   AlertCircle, CheckCircle, XCircle, Loader2,
   Activity, Zap, Eye, Download, Share2
 } from 'lucide-react';
-import BottomNav from '../navigation/BottomNav';
+import { API_BASE_URL } from '../../config';
 
 type ScanType = 'xray' | 'ct' | 'mri';
 type ScanStatus = 'idle' | 'uploading' | 'validating' | 'scanning' | 'complete' | 'error';
@@ -55,8 +55,8 @@ export default function AIScannerScreen() {
         const userId = user?.user_id || user?.id;
 
         const url = userId 
-          ? `http://127.0.0.1:8000/api/patients/?doctor_id=${userId}`
-          : 'http://127.0.0.1:8000/api/patients/';
+          ? `${API_BASE_URL}/patients/?doctor_id=${userId}`
+          : `${API_BASE_URL}/patients/`;
 
         const response = await fetch(url);
         if (response.ok) {
@@ -277,7 +277,7 @@ export default function AIScannerScreen() {
         formData.append('file', blob, 'scan.jpg');
       }
 
-      const apiResponse = await fetch('http://127.0.0.1:8000/api/predict_scan/', {
+      const apiResponse = await fetch(`${API_BASE_URL}/predict_scan/`, {
         method: 'POST',
         body: formData,
       });
@@ -430,11 +430,11 @@ export default function AIScannerScreen() {
         location: primaryFinding.location,
         severity: primaryFinding.severity.charAt(0).toUpperCase() + primaryFinding.severity.slice(1),
         impression: primaryFinding.condition.toUpperCase(),
-        observation: primaryFinding.description,
+        observation: `${primaryFinding.description} [FINDINGS_JSON:${JSON.stringify(selectedFindings)}]`,
         scan_image: imageData // Use the actual image data passed to this function
       };
 
-      const response = await fetch('http://127.0.0.1:8000/api/save-ai-report/', {
+      const response = await fetch(`${API_BASE_URL}/save-ai-report/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -571,14 +571,6 @@ export default function AIScannerScreen() {
                   Upload Image
                 </div>
               </label>
-
-              <button
-                onClick={handleTakePhoto}
-                className="flex items-center justify-center gap-3 w-full bg-white text-purple-600 py-4 rounded-2xl font-semibold border-2 border-purple-600 hover:bg-purple-50 active:scale-98 transition-all"
-              >
-                <Camera className="w-5 h-5" />
-                Take Photo
-              </button>
 
               <button
                 onClick={handleChooseFromPACS}
@@ -929,7 +921,7 @@ export default function AIScannerScreen() {
         )}
       </div>
 
-      {scanStatus === 'idle' && <BottomNav />}
+
 
       {/* Fullscreen View Modal */}
       {isViewFullscreen && uploadedImage && (

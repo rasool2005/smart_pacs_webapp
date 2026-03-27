@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { ArrowLeft, Calendar, Clock, User, FileText, Loader2, AlertCircle } from 'lucide-react';
+import { API_BASE_URL } from '../../config';
 
 export default function ScheduleAppointment() {
   const navigate = useNavigate();
@@ -27,7 +28,7 @@ export default function ScheduleAppointment() {
     const fetchPatients = async () => {
       try {
         setLoadingPatients(true);
-        const response = await fetch('http://127.0.0.1:8000/api/patients/', {
+        const response = await fetch(`${API_BASE_URL}/patients/`, {
           headers: { 'Accept': 'application/json' }
         });
         const text = await response.text();
@@ -106,7 +107,7 @@ export default function ScheduleAppointment() {
         note: formData.notes
       };
 
-      const response = await fetch('http://127.0.0.1:8000/api/schedule-study/', {
+      const response = await fetch(`${API_BASE_URL}/schedule-study/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

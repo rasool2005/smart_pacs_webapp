@@ -1,19 +1,92 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 import { ArrowLeft, Brain, AlertCircle, Download, Share2, Loader2, Sparkles, CheckCircle } from 'lucide-react';
+import { API_BASE_URL } from '../../config';
 
 export default function AIResults() {
   const navigate = useNavigate();
   const location = useLocation();
   const { id } = useParams();
 
-  const study = location.state?.study;
-  const studyType = study?.type?.toLowerCase() || 'x-ray chest';
-
+  const [study, setStudy] = useState<any>(location.state?.study);
   const [findings, setFindings] = useState<any[]>(location.state?.findings || []);
   const [overallConfidence, setOverallConfidence] = useState<string>(location.state?.overallConfidence || '0%');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isLoading, setIsLoading] = useState(!study);
   const [error, setError] = useState('');
+
+  const studyType = study?.type?.toLowerCase() || study?.examination_type?.toLowerCase() || 'x-ray chest';
+
+  useEffect(() => {
+    const fetchReportData = async () => {
+      // If we have both study and findings, we're good. If not, fetch from DB.
+      if ((study && findings && findings.length > 0) || !id || id.startsWith('study-')) return;
+      
+      try {
+        setIsLoading(true);
+        // Extract numeric ID if it has a prefix
+        const numericId = id.replace('report-', '');
+        const response = await fetch(`${API_BASE_URL}/download-report/${numericId}/`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.status === 'success' && data.report) {
+            const r = data.report;
+            setStudy({
+                ...r,
+                type: r.examination_type,
+                uploadedImage: r.scan_image,
+                thumbnail: r.scan_image
+            });
+            
+            // If the report has findings in the DB, set them
+            if (r.findings_json || (r.observation && r.observation.includes('[FINDINGS_JSON:'))) {
+                try {
+                    let findingsData;
+                    if (r.findings_json) {
+                        findingsData = JSON.parse(r.findings_json);
+                    } else {
+                        const match = r.observation.match(/\[FINDINGS_JSON:(.*)\]/);
+                        if (match) findingsData = JSON.parse(match[1]);
+                    }
+                    
+                    if (findingsData) {
+                        setFindings(findingsData);
+                        setOverallConfidence(`${r.confidence_score}%`);
+                    }
+                } catch(e) {
+                   // Fallback to primary finding if JSON parse fails
+                   setFindings([{
+                       id: `db-${r.id}`,
+                       condition: r.finding_name,
+                       severity: (r.severity || 'low').toLowerCase(),
+                       confidence: r.confidence_score,
+                       location: r.location || 'General',
+                       description: (r.observation || '').split(' [FINDINGS_JSON:')[0] || r.impression
+                   }]);
+                }
+            } else if (r.finding_name) {
+                const mappedFindings = [{
+                    id: `db-${r.id}`,
+                    condition: r.finding_name,
+                    severity: (r.severity || 'low').toLowerCase(),
+                    confidence: r.confidence_score,
+                    location: r.location || 'General',
+                    description: (r.observation || '').split(' [FINDINGS_JSON:')[0] || r.impression
+                }];
+                setFindings(mappedFindings);
+                setOverallConfidence(`${r.confidence_score}%`);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch report from server", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchReportData();
+  }, [id, study]);
 
   // Helper to convert base64 to File for API upload
   const base64ToFile = (base64String: string, fileName: string) => {
@@ -34,14 +107,22 @@ export default function AIResults() {
 
   useEffect(() => {
     const performAnalysis = async () => {
-      // If we already have findings from the scanner state, don't re-analyze
+      // If we are still fetching the record from DB, wait
+      if (isLoading) return;
+      
+      // If we already have findings (from navigation or DB), don't re-analyze
       if (findings.length > 0) return;
 
-      const imageToAnalyze = study?.uploadedImage || study?.thumbnail;
-      if (!imageToAnalyze) {
+      const rawImage = study?.uploadedImage || study?.thumbnail || study?.scan_image;
+      if (!rawImage) {
         setError('No image available for AI analysis.');
         return;
       }
+
+      // Handle relative paths from backend
+      const imageToAnalyze = (typeof rawImage === 'string' && rawImage.startsWith('/media/'))
+        ? `${API_BASE_URL.replace('/api', '')}${rawImage}`
+        : rawImage;
 
       setIsAnalyzing(true);
       setError('');
@@ -55,13 +136,13 @@ export default function AIResults() {
           const file = base64ToFile(imageToAnalyze, 'scan.jpg');
           if (file) formData.append('file', file);
         } else {
-          // Handle external URL if needed
+          // Handle path or external URL
           const response = await fetch(imageToAnalyze);
           const blob = await response.blob();
           formData.append('file', blob, 'scan.jpg');
         }
 
-        const apiResponse = await fetch('http://127.0.0.1:8000/api/predict_scan/', {
+        const apiResponse = await fetch(`${API_BASE_URL}/predict_scan/`, {
           method: 'POST',
           body: formData,
         });
@@ -97,7 +178,7 @@ export default function AIResults() {
     };
 
     performAnalysis();
-  }, [id, study]);
+  }, [id, study, isLoading]);
 
   const generateFallbackFindings = () => {
     const imageToAnalyze = study?.uploadedImage || study?.thumbnail || '';
@@ -155,68 +236,83 @@ export default function AIResults() {
     return () => clearInterval(interval);
   }, [isAnalyzing]);
 
-  if (isAnalyzing) {
+  if (isLoading || isAnalyzing) {
+    const isActuallyAnalyzing = !isLoading && isAnalyzing;
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center p-8">
         <div className="relative mb-12">
-          <div className="absolute inset-0 bg-purple-100 rounded-full animate-ping opacity-20 scale-150"></div>
+          {isActuallyAnalyzing && <div className="absolute inset-0 bg-purple-100 rounded-full animate-ping opacity-20 scale-150"></div>}
           <div className="relative bg-gradient-to-br from-purple-50 to-blue-50 p-10 rounded-full border border-purple-100 shadow-inner">
-            <Brain className="w-20 h-20 text-purple-600 animate-pulse" />
+            <Brain className={`w-20 h-20 text-purple-600 ${isActuallyAnalyzing ? 'animate-pulse' : 'animate-bounce'}`} />
           </div>
-          <div className="absolute -bottom-2 -right-2 bg-white p-2 rounded-xl shadow-lg border border-gray-100">
-            <Sparkles className="w-6 h-6 text-yellow-500 animate-bounce" />
-          </div>
-        </div>
-
-        <h2 className="text-3xl font-black text-gray-900 mb-2 tracking-tight">AI Diagnostic Suite</h2>
-        <div className="flex items-center gap-2 mb-8">
-          <div className="flex gap-1">
-            {[0, 1, 2].map(i => (
-              <div key={i} className="w-1.5 h-1.5 bg-purple-600 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.2}s` }}></div>
-            ))}
-          </div>
-          <p className="text-purple-600 font-bold uppercase tracking-widest text-xs">Processing Stream</p>
-        </div>
-
-        <div className="w-full max-w-sm space-y-4">
-          <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100">
-            {analysisSteps.map((step, idx) => (
-              <div key={idx} className={`flex items-center gap-3 mb-3 transition-opacity duration-500 ${idx > analysisStep ? 'opacity-20' : 'opacity-100'}`}>
-                {idx < analysisStep ? (
-                  <CheckCircle className="w-5 h-5 text-green-500" />
-                ) : idx === analysisStep ? (
-                  <Loader2 className="w-5 h-5 text-purple-600 animate-spin" />
-                ) : (
-                  <div className="w-5 h-5 rounded-full border-2 border-gray-200" />
-                )}
-                <span className={`text-sm ${idx === analysisStep ? 'font-bold text-gray-900' : 'text-gray-500'}`}>
-                  {step}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <div className="relative pt-1">
-            <div className="flex mb-2 items-center justify-between">
-              <div>
-                <span className="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-purple-600 bg-purple-200">
-                  Analysis Progress
-                </span>
-              </div>
-              <div className="text-right">
-                <span className="text-xs font-semibold inline-block text-purple-600">
-                  {Math.round(((analysisStep + 1) / analysisSteps.length) * 100)}%
-                </span>
-              </div>
+          {isActuallyAnalyzing && (
+            <div className="absolute -bottom-2 -right-2 bg-white p-2 rounded-xl shadow-lg border border-gray-100">
+              <Sparkles className="w-6 h-6 text-yellow-500 animate-bounce" />
             </div>
-            <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-purple-100">
-              <div
-                style={{ width: `${((analysisStep + 1) / analysisSteps.length) * 100}%` }}
-                className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-purple-600 transition-all duration-500"
-              ></div>
-            </div>
-          </div>
+          )}
         </div>
+
+        <h2 className="text-3xl font-black text-gray-900 mb-2 tracking-tight">
+          {isActuallyAnalyzing ? 'AI Diagnostic Suite' : 'Loading Record...'}
+        </h2>
+        
+        {isActuallyAnalyzing ? (
+           <>
+              <div className="flex items-center gap-2 mb-8">
+                <div className="flex gap-1">
+                  {[0, 1, 2].map(i => (
+                    <div key={i} className="w-1.5 h-1.5 bg-purple-600 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.2}s` }}></div>
+                  ))}
+                </div>
+                <p className="text-purple-600 font-bold uppercase tracking-widest text-xs">Processing Stream</p>
+              </div>
+
+              <div className="w-full max-w-sm space-y-4">
+                <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100">
+                  {analysisSteps.map((step, idx) => (
+                    <div key={idx} className={`flex items-center gap-3 mb-3 transition-opacity duration-500 ${idx > analysisStep ? 'opacity-20' : 'opacity-100'}`}>
+                      {idx < analysisStep ? (
+                        <CheckCircle className="w-5 h-5 text-green-500" />
+                      ) : idx === analysisStep ? (
+                        <Loader2 className="w-5 h-5 text-purple-600 animate-spin" />
+                      ) : (
+                        <div className="w-5 h-5 rounded-full border-2 border-gray-200" />
+                      )}
+                      <span className={`text-sm ${idx === analysisStep ? 'font-bold text-gray-900' : 'text-gray-500'}`}>
+                        {step}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="relative pt-1">
+                  <div className="flex mb-2 items-center justify-between">
+                    <div>
+                      <span className="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-purple-600 bg-purple-200">
+                        Analysis Progress
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-xs font-semibold inline-block text-purple-600">
+                        {Math.round(((analysisStep + 1) / analysisSteps.length) * 100)}%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-purple-100">
+                    <div
+                      style={{ width: `${((analysisStep + 1) / analysisSteps.length) * 100}%` }}
+                      className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-purple-600 transition-all duration-500"
+                    ></div>
+                  </div>
+                </div>
+              </div>
+           </>
+        ) : (
+            <div className="flex items-center gap-3 text-gray-500 animate-pulse">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <p>Establishing secure connection...</p>
+            </div>
+        )}
       </div>
     );
   }
@@ -237,8 +333,8 @@ export default function AIResults() {
       </div>
 
       <div className="px-6 -mt-4 mb-6">
-        <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-6 shadow-lg text-white">
-          <p className="text-green-100 text-sm mb-1">Overall Confidence</p>
+        <div className={`bg-gradient-to-br ${parseFloat(overallConfidence) >= 70 ? 'from-green-500 to-emerald-600' : 'from-orange-500 to-amber-600'} rounded-2xl p-6 shadow-lg text-white`}>
+          <p className="text-white/80 text-sm mb-1">Overall Confidence</p>
           <h3 className="text-4xl font-bold">{overallConfidence}</h3>
         </div>
       </div>

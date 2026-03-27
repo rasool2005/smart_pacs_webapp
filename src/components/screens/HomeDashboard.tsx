@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { AlertCircle, Clock, Activity, Calendar, FileText, Brain, TrendingUp, Users, Scan } from 'lucide-react';
 import WebTopBar from '../layout/WebTopBar';
+import { API_BASE_URL } from '../../config';
 
 const urgentCases = [
   { id: 1, patient: 'John Doe', age: 45, mrn: 'MRN-12345', type: 'CT Chest', aiPriority: 'Critical', confidence: 95, finding: 'Pulmonary nodule detected', time: '5 min ago' },
@@ -47,7 +48,7 @@ export default function HomeDashboard() {
     // Fetch Total Patients for this doctor
     const fetchPatients = async () => {
       try {
-        const response = await fetch(`http://127.0.0.1:8000/api/patients/?doctor_id=${userId}`, {
+        const response = await fetch(`${API_BASE_URL}/patients/?doctor_id=${userId}`, {
           headers: { 'Accept': 'application/json' }
         });
         if (response.ok) {
@@ -67,7 +68,7 @@ export default function HomeDashboard() {
     // Fetch user studies (Recent Studies & Appointments)
     const fetchUserStudies = async () => {
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/user-studies/', {
+        const response = await fetch(`${API_BASE_URL}/user-studies/`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -112,7 +113,7 @@ export default function HomeDashboard() {
     // Fetch AI Analyses & Important Findings
     const fetchAIAnalyses = async () => {
       try {
-        const response = await fetch(`http://127.0.0.1:8000/api/get-ai-reports/?user_id=${userId}`, {
+        const response = await fetch(`${API_BASE_URL}/get-ai-reports/?user_id=${userId}`, {
           headers: { 'Accept': 'application/json' }
         });
         if (response.ok) {

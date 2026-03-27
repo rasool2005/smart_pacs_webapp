@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Brain, Mail, Lock, Eye, EyeOff, ArrowLeft, Loader2 } from 'lucide-react';
+import { API_BASE_URL } from '../../config';
 
 export default function LoginScreen({ onLogin }: { onLogin: () => void }) {
   const navigate = useNavigate();
@@ -16,9 +17,7 @@ export default function LoginScreen({ onLogin }: { onLogin: () => void }) {
     setError('');
 
     try {
-      // Using generic localhost Django URL. 
-      // You should change this to match your actual API base URL.
-      const response = await fetch('http://127.0.0.1:8000/api/login/', {
+      const response = await fetch(`${API_BASE_URL}/login/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

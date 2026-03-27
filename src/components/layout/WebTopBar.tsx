@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Search, Bell, User, X, AlertCircle, CheckCircle, Clock, Info, Scan } from 'lucide-react';
 import { useNavigate } from 'react-router';
+import { API_BASE_URL } from '../../config';
 
 const notifications = [
   {
@@ -97,10 +98,19 @@ export default function WebTopBar() {
   const panelRef = useRef<HTMLDivElement>(null);
   const bellRef = useRef<HTMLButtonElement>(null);
 
-  // Get logged-in user name
+  // Get logged-in user data
   const storedUser = localStorage.getItem('user');
   const user = storedUser ? JSON.parse(storedUser) : null;
   const doctorName = user?.name || 'Doctor';
+
+  const profileImage = (() => {
+    if (user?.profile_photo) {
+      if (user.profile_photo.startsWith('http')) return user.profile_photo;
+      const baseUrl = API_BASE_URL.replace('/api', '');
+      return `${baseUrl}${user.profile_photo}`;
+    }
+    return null;
+  })();
 
   const unreadCount = notifs.filter(n => !n.read).length;
 
@@ -280,8 +290,12 @@ export default function WebTopBar() {
           onClick={() => navigate('/profile')}
           className="flex items-center gap-3 pl-3 pr-4 py-2 hover:bg-gray-100 rounded-xl transition-colors"
         >
-          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
-            <User className="w-4 h-4 text-white" />
+          <div className="w-9 h-9 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center border-2 border-gray-100 shadow-sm">
+            {profileImage ? (
+              <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
+            ) : (
+              <User className="w-5 h-5 text-white" />
+            )}
           </div>
           <div className="text-left">
             <p className="text-sm font-semibold text-gray-900">{doctorName}</p>

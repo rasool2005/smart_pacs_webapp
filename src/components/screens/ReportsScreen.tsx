@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { ArrowLeft, Trash2, FileText, Search, Loader2, AlertCircle } from 'lucide-react';
+import { API_BASE_URL } from '../../config';
 
 interface AIReport {
     id: number;
@@ -14,6 +15,7 @@ interface AIReport {
     patient_name?: string; // Optional if not in API initially
     scan_image?: string;
     thumbnail?: string;
+    findings?: any[];
 }
 
 export default function ReportsScreen() {
@@ -32,9 +34,16 @@ export default function ReportsScreen() {
             setLoading(true);
             const storedUser = localStorage.getItem('user');
             const user = storedUser ? JSON.parse(storedUser) : null;
-            const userId = user?.user_id || user?.id || 1;
+            // Support both id and user_id fields
+            const userId = user?.user_id || user?.id;
 
-            const response = await fetch(`http://127.0.0.1:8000/api/get-ai-reports/?user_id=${userId}`, {
+            if (!userId) {
+              setError('Please login to view your reports');
+              setLoading(false);
+              return;
+            }
+
+            const response = await fetch(`${API_BASE_URL}/get-ai-reports/?user_id=${userId}`, {
                 headers: { 'Accept': 'application/json' }
             });
 
@@ -42,10 +51,19 @@ export default function ReportsScreen() {
                 const data = await response.json();
                 const reportsList = data.reports || data.data || [];
 
-                // Removed dummy data injection to ensure persistent deletion state.
                 // Enhance API data with thumbnails/names for better UI matching
                 const enhancedReports = reportsList.map((r: any) => ({
                     ...r,
+                    findings: (() => {
+                        if (r.findings_json) {
+                          try { return JSON.parse(r.findings_json); } catch(e) {}
+                        }
+                        const match = (r.observation || '').match(/\[FINDINGS_JSON:(.*)\]/);
+                        if (match) {
+                          try { return JSON.parse(match[1]); } catch(e) {}
+                        }
+                        return r.findings ? r.findings : [];
+                    })(),
                     patient_name: r.patient_name || 'Unknown Patient',
                     thumbnail: r.scan_image || r.thumbnail || 'https://images.unsplash.com/photo-1584555684040-bad07f46a21f?w=100&h=100&fit=crop'
                 })).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -63,7 +81,7 @@ export default function ReportsScreen() {
 
     const handleDelete = async (id: number) => {
         try {
-            const response = await fetch(`http://127.0.0.1:8000/api/delete-ai-report/${id}/`, {
+            const response = await fetch(`${API_BASE_URL}/delete-ai-report/${id}/`, {
                 method: 'DELETE'
             });
 
@@ -179,9 +197,28 @@ export default function ReportsScreen() {
                                         </button>
                                     </div>
                                     <p className="text-gray-700 font-medium text-sm mb-1">{report.examination_type}</p>
-                                    <p className="text-gray-500 text-xs font-semibold">
-                                        {formatDate(report.created_at)} • <span className={report.severity === 'Critical' ? 'text-red-600' : 'text-blue-600'}>{report.finding_name}</span>
+                                    <p className="text-gray-500 text-xs font-semibold mb-2">
+                                        {formatDate(report.created_at)} • <span className={(report.severity || '').toLowerCase() === 'critical' ? 'text-red-600' : 'text-blue-600'}>{report.finding_name}</span>
                                     </p>
+
+                                    {/* AI Findings Tags */}
+                                    {report.findings && report.findings.length > 0 && (
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {report.findings.map((f: any, idx: number) => (
+                                                <span 
+                                                    key={idx} 
+                                                    className={`px-2 py-0.5 rounded text-[10px] font-bold border flex items-center gap-1 shadow-sm ${
+                                                        (f.severity || '').toLowerCase() === 'critical' ? 'bg-red-50 text-red-700 border-red-100' :
+                                                        (f.severity || '').toLowerCase() === 'moderate' ? 'bg-orange-50 text-orange-700 border-orange-100' :
+                                                        'bg-blue-50 text-blue-700 border-blue-100'
+                                                    }`}
+                                                >
+                                                    <AlertCircle className="w-2.5 h-2.5" />
+                                                    {f.condition || f.finding_name}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         ))}

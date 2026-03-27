@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router';
-import { ArrowLeft, Save, Download, Send, Loader2, AlertCircle, CheckCircle2, X } from 'lucide-react';
+import { ArrowLeft, Save, Download, Send, Loader2, AlertCircle, CheckCircle, X, Sparkles, Mail, Share2, Brain } from 'lucide-react';
+import { API_BASE_URL } from '../../config';
 
 export default function ReportEditor() {
   const navigate = useNavigate();
@@ -18,48 +19,72 @@ export default function ReportEditor() {
   const [patientEmail, setPatientEmail] = useState('');
   const [reportText, setReportText] = useState('');
 
-  // Helper to generate a structured report text matching the reference image
-  const generateReportText = (data: any) => {
-    if (!data) return '';
+  // Helper to generate a comprehensive professional report
+  const generateReportText = (rawData: any) => {
+    if (!rawData) return '';
 
-    let text = `EXAMINATION: ${data.examination_type || 'X-RAY'} SCAN\n\n`;
+    // Clean data for representation (remove hidden JSON tags)
+    const data = {
+      ...rawData,
+      observation: (rawData.observation || '').split(' [FINDINGS_JSON:')[0],
+      findings: rawData.findings || []
+    };
 
-    text += `AI ANALYSIS METRICS:\n`;
-    text += `- Confidence Score: ${data.confidence_score || '90.0'}%\n`;
-    text += `- Confidence Level: ${data.confidence_level || 'High'}\n\n`;
+    const patientName = data.patient_name || reportData?.patientName || 'Guest Patient';
+    const dateStr = new Date(data.created_at || Date.now()).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+
+    let text = `SMRT PACS DIAGNOSTIC REPORT\n`;
+    text += `============================\n\n`;
+    text += `PATIENT: ${patientName.toUpperCase()}\n`;
+    text += `DATE: ${dateStr}\n`;
+    text += `EXAMINATION: ${data.examination_type?.toUpperCase() || 'X-RAY'} SCAN\n\n`;
 
     text += `AI FINDINGS:\n`;
 
-    const findingsList = data.findings || [{
+    const findingsList = data.findings.length > 0 ? data.findings : [{
       condition: data.finding_name || 'Normal Findings',
       location: data.location || 'General',
       observation: data.observation || data.description || 'No acute abnormalities detected.',
       severity: data.severity || 'Low'
     }];
 
-    findingsList.forEach((f: any, idx: number) => {
-      text += `${idx + 1}. ${f.condition || f.finding_name}\n`;
-      text += `   - Location: ${f.location || 'General'}\n`;
-      text += `   - Observation: ${f.observation || f.description || 'Verified via AI analysis.'}\n`;
-      text += `   - Severity: ${f.severity || 'Low'}\n\n`;
+    // Clean and format findings
+    const cleanedFindings = findingsList.map((f: any) => ({
+       condition: f.condition || f.finding_name,
+       location: f.location || 'General',
+       observation: (f.observation || f.description || 'Verified via AI analysis.').split(' [FINDINGS_JSON:')[0],
+       severity: (f.severity || 'Low')
+    }));
+
+    cleanedFindings.forEach((f: any, idx: number) => {
+      text += `${idx + 1}. ${f.condition}\n`;
+      text += `   - Location: ${f.location}\n`;
+      text += `   - Observation: ${f.observation}\n`;
+      text += `   - Severity: ${f.severity}\n\n`;
     });
 
     text += `AI IMPRESSION:\n`;
-    findingsList.forEach((f: any) => {
-      const condition = (f.condition || f.finding_name);
-      if (condition && condition.toLowerCase() !== 'normal' && condition.toLowerCase() !== 'normal findings') {
-        text += `- Evidence of ${condition} localized to ${f.location || 'specified regions'}.\n`;
-      }
-    });
+    const significantFindings = cleanedFindings.filter((f: any) => 
+      f.condition && f.condition.toLowerCase() !== 'normal' && f.condition.toLowerCase() !== 'normal findings'
+    );
 
-    if (findingsList.every((f: any) => {
-      const c = (f.condition || f.finding_name)?.toLowerCase();
-      return c === 'normal' || c === 'normal findings';
-    })) {
-      text += `- No acute intracranial or thoracic findings detected.\n`;
+    if (significantFindings.length > 0) {
+      significantFindings.forEach((f: any) => {
+        text += `- Evidence of ${f.condition} localized to ${f.location}.\n`;
+      });
+    } else {
+      text += `- No acute abnormalities detected on AI analysis.\n`;
     }
 
-    text += `- Radiologist correlation is strongly advised.`;
+    text += `\nAI ANALYSIS METRICS:\n`;
+    text += `- Confidence Score: ${data.confidence_score || '90.0'}%\n`;
+    text += `- Radiologist correlation is strongly advised.\n\n`;
+    text += `----------------------------\n`;
+    text += `Report generated via SMRT PACS AI Suite`;
 
     return text;
   };
@@ -67,9 +92,14 @@ export default function ReportEditor() {
   useEffect(() => {
     // If we have data in state but no reportText yet, generate it
     if (reportData && !reportText) {
-      if (reportData.observation && reportData.observation.length > 100) {
-        setReportText(reportData.observation);
+      const obs = reportData.observation || '';
+      const cleanText = obs.split(' [FINDINGS_JSON:')[0];
+      
+      // If observation is already a full professional report (contains signature), use it
+      if (cleanText.includes('SMRT PACS DIAGNOSTIC REPORT')) {
+        setReportText(cleanText);
       } else {
+        // Otherwise generate a structured professional one
         setReportText(generateReportText(reportData));
       }
     }
@@ -87,7 +117,7 @@ export default function ReportEditor() {
   const fetchReportDetails = async () => {
     setIsLoading(true);
     try {
-      const resp = await fetch(`http://127.0.0.1:8000/api/download-report/${id}/`);
+      const resp = await fetch(`${API_BASE_URL}/download-report/${id}/`);
       const data = await resp.json();
       if (resp.ok && data.status === 'success' && data.report) {
         setReportData((prev: any) => ({
@@ -98,8 +128,28 @@ export default function ReportEditor() {
         setSavedReportId(Number(id));
 
         // Use fetched observation if it's meaningful, otherwise generate or use state
-        if (data.report.observation && data.report.observation.length > 100) {
-          setReportText(data.report.observation);
+        if (data.report.observation) {
+          const split = data.report.observation.split(' [FINDINGS_JSON:');
+          const cleanText = split[0];
+          const jsonPart = split[1] ? split[1].split(']')[0] : null;
+          
+          let fetchedFindings = [];
+          if (jsonPart) {
+            try { fetchedFindings = JSON.parse(jsonPart); } catch(e) {}
+          }
+
+          // Update reportData with findings so generateReportText can use them
+          setReportData((prev: any) => ({
+            ...prev,
+            ...data.report,
+            findings: fetchedFindings.length > 0 ? fetchedFindings : prev?.findings
+          }));
+
+          if (cleanText.includes('SMRT PACS DIAGNOSTIC REPORT')) {
+            setReportText(cleanText);
+          } else {
+            setReportText(generateReportText({ ...data.report, findings: fetchedFindings }));
+          }
         } else if (!reportText) {
           setReportText(generateReportText({ ...reportData, ...data.report }));
         }
@@ -130,10 +180,10 @@ export default function ReportEditor() {
         location: reportData?.location || "General",
         severity: reportData?.severity || "Moderate",
         impression: reportData?.impression || "IMPRESSION",
-        observation: reportText,
+        observation: `${reportText} [FINDINGS_JSON:${JSON.stringify(reportData?.findings || [])}]`,
       };
 
-      const response = await fetch('http://127.0.0.1:8000/api/save-ai-report/', {
+      const response = await fetch(`${API_BASE_URL}/save-ai-report/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -155,7 +205,7 @@ export default function ReportEditor() {
 
         // Fetch latest reports to get ID for download/send if not provided by save response
         try {
-          const getReports = await fetch(`http://127.0.0.1:8000/api/get-ai-reports/?user_id=${userId}`);
+          const getReports = await fetch(`${API_BASE_URL}/get-ai-reports/?user_id=${userId}`);
           const reportsData = await getReports.json();
           if (reportsData.status === 'success' && reportsData.reports.length > 0) {
             setSavedReportId(reportsData.reports[0].id);
@@ -190,7 +240,7 @@ export default function ReportEditor() {
     setError('');
 
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/download-report/${savedReportId}/`);
+      const response = await fetch(`${API_BASE_URL}/download-report/${savedReportId}/`);
       const data = await response.json();
 
       if (response.ok && data.status === 'success') {
@@ -224,7 +274,7 @@ export default function ReportEditor() {
     setError('');
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/send-report-email/', {
+      const response = await fetch(`${API_BASE_URL}/send-report-email/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -273,7 +323,7 @@ export default function ReportEditor() {
 
       {successMsg && (
         <div className="mx-6 mt-6 bg-green-50 text-green-700 px-4 py-3 rounded-xl flex items-center gap-2 border border-green-200">
-          <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+            <CheckCircle className="w-5 h-5" />
           <p className="font-medium text-sm">{successMsg}</p>
         </div>
       )}
@@ -332,6 +382,49 @@ export default function ReportEditor() {
               Send
             </button>
           </div>
+          <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold text-gray-900 flex items-center gap-2">
+              <Brain className="w-5 h-5 text-purple-600" />
+              AI Diagnostic Context
+            </h3>
+            <div className={`px-3 py-1 rounded-lg text-xs font-bold ${
+              parseFloat(reportData?.confidence_score || '0') >= 80 ? 'bg-green-50 text-green-700' : 'bg-orange-50 text-orange-700'
+            }`}>
+              {reportData?.confidence_score || '0'}% Confidence
+            </div>
+          </div>
+          
+          <div className="flex flex-wrap gap-2 mb-4">
+            {(reportData?.findings || []).map((f: any, idx: number) => (
+              <div key={idx} className="flex items-center gap-1.5 bg-blue-50 text-blue-700 px-3 py-1.5 rounded-xl text-xs font-bold border border-blue-100">
+                <AlertCircle className="w-3.5 h-3.5" />
+                {f.condition || f.finding_name}
+              </div>
+            ))}
+            {(!reportData?.findings || reportData.findings.length === 0) && (
+              <div className="flex items-center gap-1.5 bg-gray-50 text-gray-600 px-3 py-1.5 rounded-xl text-xs font-bold border border-gray-200">
+                <AlertCircle className="w-3.5 h-3.5" />
+                {reportData?.finding_name || 'Generic Observation'}
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 mb-2">
+            <CheckCircle className="w-4 h-4 text-green-600" />
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Drafting Metadata</span>
+          </div>
+        </div>
+          <button
+            onClick={() => {
+              const fullReport = generateReportText(reportData);
+              setReportText(fullReport);
+            }}
+            className="flex items-center justify-center gap-2 w-full bg-blue-50 text-blue-600 px-4 py-3 rounded-xl text-sm font-bold hover:bg-blue-100 transition-colors"
+          >
+            <Sparkles className="w-4 h-4" />
+            Regenerate Professional Report
+          </button>
         </div>
 
         {showEmailModal && (

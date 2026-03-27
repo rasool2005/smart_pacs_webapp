@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Calendar, Clock, Plus, ChevronRight, Loader2, AlertCircle } from 'lucide-react';
+import { API_BASE_URL } from '../../config';
 
 export default function FollowUpDashboard() {
   const navigate = useNavigate();
@@ -26,7 +27,7 @@ export default function FollowUpDashboard() {
           return;
         }
 
-        const response = await fetch('http://127.0.0.1:8000/api/user-studies/', {
+        const response = await fetch(`${API_BASE_URL}/user-studies/`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -161,7 +162,7 @@ export default function FollowUpDashboard() {
                           if (window.confirm('Are you sure you want to remove this appointment?')) {
                             // Attempt to delete from backend if the endpoint supports it (placeholder)
                             try {
-                              await fetch(`http://127.0.0.1:8000/api/user-studies/${study.id}/`, {
+                              await fetch(`${API_BASE_URL}/user-studies/${study.id}/`, {
                                 method: 'DELETE'
                               });
                             } catch (err) {

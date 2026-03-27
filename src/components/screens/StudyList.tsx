@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { Search, Filter, Loader2, AlertCircle, FileStack, Trash2 } from 'lucide-react';
+import { Search, Filter, Loader2, AlertCircle, FileStack, Trash2, Activity, Brain, CheckCircle } from 'lucide-react';
+import { API_BASE_URL } from '../../config';
 
 export default function StudyList() {
   const navigate = useNavigate();
@@ -29,12 +30,12 @@ export default function StudyList() {
 
         // Fetch BOTH scheduled studies AND AI scan results to show everything in Studies
         const [studiesRes, reportsRes] = await Promise.all([
-          fetch('http://127.0.0.1:8000/api/user-studies/', {
+          fetch(`${API_BASE_URL}/user-studies/`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ user_id: userId })
           }),
-          fetch(`http://127.0.0.1:8000/api/get-ai-reports/?user_id=${userId}`)
+          fetch(`${API_BASE_URL}/get-ai-reports/?user_id=${userId}`)
         ]);
 
         let combinedData: any[] = [];
@@ -44,10 +45,11 @@ export default function StudyList() {
           if (data.status === 'success') {
             const mapped = (data.studies || []).map((s: any) => ({
               id: `study-${s.id}`,
-              patient: s.patient_name || "Unknown",
+              patient: s.patient_name || "Unknown Patient",
               mrn: s.mrn || `MRN-${s.patient_id || 'N/A'}`,
               type: s.study_type,
               date: s.study_date,
+              sortDate: s.study_date ? new Date(s.study_date).getTime() : 0,
               priority: s.priority || (s.status === 'confirmed' ? 'Normal' : 'High'),
               status: s.status,
               isScan: false,
@@ -59,18 +61,35 @@ export default function StudyList() {
 
         if (reportsRes.ok) {
           const data = await reportsRes.json();
-          if (data.status === 'success') {
-            const mapped = (data.reports || []).map((r: any) => ({
+          // Backend returns reports in data.reports or data.data
+          const reportsArray = data.reports || data.data || [];
+          if (Array.isArray(reportsArray)) {
+            const mapped = reportsArray.map((r: any) => ({
               id: `report-${r.id}`,
-              patient: r.patient_name || "Guest Patient",
-              mrn: `SCAN-${r.id}`,
-              type: `${r.examination_type} Result`,
+              patient: r.patient_name || "Unknown Patient",
+              mrn: r.patient_id ? `MRN-${r.patient_id}` : `SCAN-${r.id}`,
+              type: r.examination_type === 'XRAY' ? 'X-Ray Result' : 
+                    r.examination_type === 'CT' ? 'CT Scan Result' : 
+                    r.examination_type === 'MRI' ? 'MRI Result' : 
+                    `${r.examination_type} Result`,
               date: new Date(r.created_at).toLocaleDateString(),
-              priority: r.severity === 'Critical' ? 'Critical' : 'Normal',
+              sortDate: r.created_at ? new Date(r.created_at).getTime() : 0,
+              priority: r.severity || 'Normal',
               status: 'Completed',
               isScan: true,
-              result: r.finding_name,
+              result: r.finding_name || r.condition || r.impression || "Normal Scan",
+              findings: (() => {
+                if (r.findings_json) {
+                   try { return JSON.parse(r.findings_json); } catch(e) {}
+                }
+                const match = (r.observation || '').match(/\[FINDINGS_JSON:(.*)\]/);
+                if (match) {
+                  try { return JSON.parse(match[1]); } catch(e) {}
+                }
+                return r.findings ? r.findings : [];
+              })(),
               confidence: r.confidence_score,
+              confidenceLevel: r.confidence_level || (r.confidence_score >= 85 ? "High" : r.confidence_score >= 70 ? "Medium" : "Low"),
               image: r.scan_image,
               raw: r
             }));
@@ -78,7 +97,13 @@ export default function StudyList() {
           }
         }
 
-        setStudiesList(combinedData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+        // Final Sort: Filter out NaN from sortDate and sort descending
+        const finalData = combinedData.sort((a, b) => {
+          const dateB = isNaN(b.sortDate) ? 0 : b.sortDate;
+          const dateA = isNaN(a.sortDate) ? 0 : a.sortDate;
+          return dateB - dateA;
+        });
+        setStudiesList(finalData);
       } catch (err) {
         console.error('Study fetch error:', err);
         setError('Cannot connect to server.');
@@ -115,8 +140,8 @@ export default function StudyList() {
     try {
       const isReport = study.isScan;
       const endpoint = isReport 
-        ? `http://127.0.0.1:8000/api/delete-ai-report/${dbId}/`
-        : `http://127.0.0.1:8000/api/delete-study/${dbId}/`;
+        ? `${API_BASE_URL}/delete-ai-report/${dbId}/`
+        : `${API_BASE_URL}/delete-study/${dbId}/`;
 
       console.log(`Attempting to delete ${isReport ? 'Report' : 'Study'} with ID: ${dbId}`);
 
@@ -191,15 +216,19 @@ export default function StudyList() {
                 if ((e.target as HTMLElement).closest('button')) return;
 
                 // Ensure the object has the correct fields for the Results page
-                const navigateData = study.isScan ? {
-                  ...study.raw,
-                  type: study.raw.examination_type,
-                  uploadedImage: study.raw.scan_image,
-                  patientName: study.raw.patient_name
+                 const navigateData = study.isScan ? {
+                  ...(study.raw || {}),
+                  type: study.raw?.examination_type || study.type,
+                  uploadedImage: study.raw?.scan_image || study.image,
+                  patientName: study.raw?.patient_name || study.patient
                 } : study.raw;
 
-                navigate(`/ai-results/${study.raw.id || study.id}`, { 
-                  state: { study: navigateData } 
+                navigate(`/ai-results/${study.id}`, { 
+                  state: { 
+                    study: navigateData,
+                    findings: study.findings || [],
+                    overallConfidence: study.confidence ? `${study.confidence}%` : '0%'
+                  } 
                 });
               }}
               className={`bg-white rounded-2xl p-4 shadow-sm active:scale-[0.99] transition-all cursor-pointer border ${study.isScan ? 'border-l-4 border-l-purple-500' : 'border-transparent'} hover:border-blue-200 hover:shadow-md`}
@@ -211,10 +240,56 @@ export default function StudyList() {
                     {study.isScan && <span className="ml-2 px-2 py-0.5 bg-purple-100 text-purple-700 text-[10px] rounded uppercase shrink-0">Scan Result</span>}
                   </h3>
                   <p className="text-sm text-gray-600 truncate">{study.patient} • {study.mrn}</p>
-                  {study.result && (
-                    <p className="mt-2 text-sm font-bold text-blue-700 bg-blue-50 px-3 py-1 rounded-lg inline-block">
-                      Diagnosis: {study.result}
-                    </p>
+                  
+                  {/* Status Badge for Appointments */}
+                  {!study.isScan && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                          study.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                        }`}>
+                          {study.status}
+                        </span>
+                      </div>
+                  )}
+
+                  {study.isScan && study.result && (
+                    <div className="mt-2.5 space-y-2">
+                       {/* Primary Result Chip */}
+                      <p className="text-sm font-bold text-white bg-blue-600 px-3 py-1.5 rounded-lg inline-flex items-center gap-2 shadow-sm">
+                        <Activity className="w-4 h-4" />
+                        Diagnosis: {study.result}
+                      </p>
+
+                      {/* AI Confidence Chip */}
+                      <div className="flex items-center gap-2">
+                        <span className="flex items-center gap-1.5 text-[11px] font-bold text-green-700 bg-green-50 px-2 py-1 rounded-md border border-green-100">
+                           <CheckCircle className="w-3 h-3" />
+                           {study.confidence}% AI Confidence
+                        </span>
+                        <span className="text-[10px] font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded-md border border-purple-100 uppercase tracking-tight">
+                           {study.confidenceLevel}
+                        </span>
+                      </div>
+
+                      {/* Full Findings Tags for AI Scans */}
+                      {study.findings && study.findings.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                           {study.findings.map((f: any, idx: number) => (
+                              <span 
+                                key={idx} 
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold border flex items-center gap-1 whitespace-nowrap shadow-sm ${
+                                  (f.severity || '').toLowerCase() === 'critical' ? 'bg-red-50 text-red-700 border-red-100' :
+                                  (f.severity || '').toLowerCase() === 'moderate' ? 'bg-orange-50 text-orange-700 border-orange-100' :
+                                  'bg-blue-50 text-blue-700 border-blue-100'
+                                }`}
+                              >
+                                 <AlertCircle className="w-2.5 h-2.5" />
+                                 {f.condition}
+                              </span>
+                           ))}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
                 <div className="flex items-center gap-3 ml-4 shrink-0">

@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
 import { Search, Filter, UserPlus, Phone, Mail, Loader2, AlertCircle, Trash2 } from 'lucide-react';
+import { API_BASE_URL } from '../../config';
 
 export default function PatientList() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [searchQuery, setSearchQuery] = useState('');
-
   // State for API integration
   const [patients, setPatients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,7 +31,7 @@ export default function PatientList() {
 
         // Fetch patients - including doctor_id in URL for backend filtering
         const timestamp = new Date().getTime();
-        const url = `http://127.0.0.1:8000/api/patients/?doctor_id=${userId}&t=${timestamp}`;
+        const url = `${API_BASE_URL}/patients/?doctor_id=${userId}&t=${timestamp}`;
 
         const response = await fetch(url, {
           headers: {
@@ -83,14 +82,8 @@ export default function PatientList() {
     fetchPatients();
   }, [location.key]); // Trigger re-fetch on every navigation event to this path
 
-  // Filter based on search query mapping against the backend's snake_case properties
-  const filteredPatients = patients.filter(patient => {
-    const query = searchQuery.toLowerCase();
-    const name = (patient.patient_name || '').toLowerCase();
-    const email = (patient.email || '').toLowerCase();
-    const id = String(patient.patient_id).toLowerCase();
-    return name.includes(query) || email.includes(query) || id.includes(query);
-  });
+  // Filtered patients (no local search bar, use full list)
+  const filteredPatients = patients;
 
   // Calculate age helper from YYYY-MM-DD
   const calculateAge = (dobString: string) => {
@@ -125,25 +118,6 @@ export default function PatientList() {
         </div>
       )}
 
-      {/* Search and Filters */}
-      <div className="bg-white rounded-xl p-4 mb-6 shadow-sm">
-        <div className="flex gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by name, ID, or email..."
-              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <button className="bg-gray-50 px-4 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-100 transition-colors flex items-center gap-2">
-            <Filter className="w-5 h-5 text-gray-600" />
-            <span className="font-medium text-gray-700">Filters</span>
-          </button>
-        </div>
-      </div>
 
       {/* Patient Table */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden min-h-[400px]">
@@ -240,24 +214,20 @@ export default function PatientList() {
                             // Attempt to delete from backend if the endpoint supports it
                             try {
                               const patientIdToDelete = patient.patient_id;
-                              const response = await fetch(`http://127.0.0.1:8000/api/patients/${patientIdToDelete}/`, {
+                              const response = await fetch(`${API_BASE_URL}/delete-patient/${patientIdToDelete}/`, {
                                 method: 'DELETE'
                               });
                               
-                              if (response.ok) {
+                               if (response.ok) {
                                 // If backend delete successful, remove from local state
                                 setPatients(prev => prev.filter(p => String(p.patient_id) !== String(patientIdToDelete)));
                               } else {
-                                // Even if backend fails (e.g. 404), maybe we still want to remove it from UI if it's "stuck"
-                                // or at least show an error. Let's still remove it from local state for responsiveness,
-                                // or better, show an error. 
-                                // Based on user report, let's ensure it actually deletes from the page.
-                                setPatients(prev => prev.filter(p => String(p.patient_id) !== String(patientIdToDelete)));
+                                const data = await response.json().catch(() => ({ message: 'Deletion failed on server.' }));
+                                alert(data.message || 'Failed to delete patient. Please try again.');
                               }
                             } catch (err) {
                               console.error('Error deleting patient:', err);
-                              // Still remove from local state to ensure it disappears from the page as requested
-                              setPatients(prev => prev.filter(p => String(p.patient_id) !== String(patient.patient_id)));
+                              alert('Cannot connect to server to delete patient.');
                             }
                           }
                         }}

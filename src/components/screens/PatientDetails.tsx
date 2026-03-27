@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { ArrowLeft, User, Calendar, Phone, Mail, FileText, Activity, MapPin, Droplet, AlertCircle, Loader2, Trash2 } from 'lucide-react';
+import { API_BASE_URL } from '../../config';
 
 export default function PatientDetails() {
   const navigate = useNavigate();
@@ -19,7 +20,7 @@ export default function PatientDetails() {
     const fetchScanHistory = async () => {
       if (!patientId) return;
       try {
-        const response = await fetch(`http://127.0.0.1:8000/api/get-ai-reports/?patient_id=${patientId}`);
+        const response = await fetch(`${API_BASE_URL}/get-ai-reports/?patient_id=${patientId}`);
         if (response.ok) {
           const data = await response.json();
           if (data.status === 'success') {
@@ -53,7 +54,7 @@ export default function PatientDetails() {
     e.stopPropagation(); // prevent navigation
     if (window.confirm('Are you sure you want to delete this scan result?')) {
       try {
-        const response = await fetch(`http://127.0.0.1:8000/api/delete-ai-report/${scanId}/`, {
+        const response = await fetch(`${API_BASE_URL}/delete-ai-report/${scanId}/`, {
           method: 'DELETE'
         });
         if (response.ok) {
@@ -81,8 +82,8 @@ export default function PatientDetails() {
         const userId = user?.user_id || user?.id;
 
         const url = userId 
-          ? `http://127.0.0.1:8000/api/patients/?doctor_id=${userId}`
-          : 'http://127.0.0.1:8000/api/patients/';
+          ? `${API_BASE_URL}/patients/?doctor_id=${userId}`
+          : `${API_BASE_URL}/patients/`;
 
         const response = await fetch(url);
         const text = await response.text();

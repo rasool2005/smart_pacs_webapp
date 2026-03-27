@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Brain, Mail, Lock, User, Building2, Eye, EyeOff, ArrowLeft, Loader2 } from 'lucide-react';
+import { API_BASE_URL } from '../../config';
 
 export default function SignUpScreen() {
   const navigate = useNavigate();
@@ -38,7 +39,7 @@ export default function SignUpScreen() {
 
       // Assuming localhost Django server based on previous messages
       // Update the URL below if your API URL is different (e.g., /api/register/)
-      const response = await fetch('http://127.0.0.1:8000/api/register/', {
+      const response = await fetch(`${API_BASE_URL}/register/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

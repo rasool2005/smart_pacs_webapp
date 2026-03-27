@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import {
   User, Mail, Phone, Calendar, Home, Save, ChevronDown, Search, X, Loader2, AlertCircle, CheckCircle2
 } from 'lucide-react';
+import { API_BASE_URL } from '../../config';
 
 interface Country {
   name: string;
@@ -244,7 +245,7 @@ export default function PersonalInfo() {
         const user = storedUser ? JSON.parse(storedUser) : null;
         const userId = user?.user_id || user?.id || 1;
 
-        const response = await fetch('http://127.0.0.1:8000/api/get-personal-info/', {
+        const response = await fetch(`${API_BASE_URL}/get-personal-info/`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -274,6 +275,9 @@ export default function PersonalInfo() {
             const countryEntry = countries.find(c => c.code === info.country);
             if (countryEntry) setSelectedCountry(countryEntry);
           }
+          // Update user in localStorage to sync across components (e.g., profile photo, name)
+          const updatedUser = { ...user, ...info };
+          localStorage.setItem('user', JSON.stringify(updatedUser));
         }
       } catch (err) {
         console.error('Failed to fetch personal info:', err);
@@ -317,8 +321,8 @@ export default function PersonalInfo() {
       };
 
       const endpoint = isExistingProfile
-        ? 'http://127.0.0.1:8000/api/update-profile/'
-        : 'http://127.0.0.1:8000/api/save-personal-info/';
+        ? `${API_BASE_URL}/update-profile/`
+        : `${API_BASE_URL}/save-personal-info/`;
 
       const response = await fetch(endpoint, {
         method: 'POST',

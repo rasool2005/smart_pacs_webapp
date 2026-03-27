@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { User, Calendar, Phone, Mail, MapPin, Droplet, AlertCircle, Save, X, ChevronDown, Loader2 } from 'lucide-react';
+import { API_BASE_URL } from '../../config';
 
 const countries = [
   { code: 'US', name: 'United States', flag: '🇺🇸', dialCode: '+1' },
@@ -87,8 +88,8 @@ export default function AddNewPatient() {
   };
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Only allow digits
-    const value = e.target.value.replace(/\D/g, '');
+    // Only allow digits - max 10
+    const value = e.target.value.replace(/\D/g, '').substring(0, 10);
     setFormData(prev => ({ ...prev, phoneNumber: value }));
   };
 
@@ -100,19 +101,54 @@ export default function AddNewPatient() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
 
+    // Validation
+    const nameRegex = /^[a-zA-Z\s]{4,}$/;
+    if (!nameRegex.test(formData.patientName)) {
+      setError('Patient name must be at least 4 letters and contain no numbers or symbols.');
+      return;
+    }
+
+    if (!formData.dateOfBirth) {
+      setError('Date of birth is required.');
+      return;
+    }
+
+    const selectedDate = new Date(formData.dateOfBirth);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (selectedDate > today) {
+      setError('Date of birth cannot be in the future.');
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+
+    if (formData.phoneNumber.length !== 10) {
+      setError('Phone number must be exactly 10 digits.');
+      return;
+    }
+
+    setLoading(true);
     try {
       // Get logged in user to tie patient to the correct doctor/hospital, if applicable
-      const userStr = localStorage.getItem('user');
-      const user = userStr ? JSON.parse(userStr) : null;
+      let user = null;
+      try {
+        const userStr = localStorage.getItem('user');
+        user = userStr ? JSON.parse(userStr) : null;
+      } catch (err) {
+        console.error("Error parsing user from localStorage", err);
+      }
 
       // Map to snake_case for Django
       const payload = {
         patient_name: formData.patientName,
-        dob: formData.dateOfBirth, // Django expects this exact key name
-        country_code: formData.countryCode,
+        dob: formData.dateOfBirth,
         phone_number: formData.phoneNumber,
         email: formData.email,
         address: formData.address,
@@ -123,7 +159,7 @@ export default function AddNewPatient() {
         ...(user?.user_id && { doctor_id: user.user_id })
       };
 
-      const response = await fetch('http://127.0.0.1:8000/api/add-patient/', {
+      const response = await fetch(`${API_BASE_URL}/add-patient/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -261,6 +297,7 @@ export default function AddNewPatient() {
                     type="date"
                     name="dateOfBirth"
                     value={formData.dateOfBirth}
+                    max={new Date().toISOString().split('T')[0]}
                     onChange={handleChange}
                     required
                     disabled={loading}
@@ -347,7 +384,7 @@ export default function AddNewPatient() {
                       disabled={loading}
                       className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
                       placeholder="1234567890"
-                      maxLength={15}
+                      maxLength={10}
                     />
                   </div>
                 </div>

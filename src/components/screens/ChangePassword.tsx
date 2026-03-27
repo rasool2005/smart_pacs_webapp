@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { ArrowLeft, Lock, Eye, EyeOff, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { API_BASE_URL } from '../../config';
 
 export default function ChangePassword() {
   const navigate = useNavigate();
@@ -37,14 +38,18 @@ export default function ChangePassword() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/change-password/', {
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      const userId = user?.user_id || user?.id || 1;
+
+      const response = await fetch(`${API_BASE_URL}/change-password/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
         body: JSON.stringify({
-          user_id: 1,
+          user_id: userId,
           current_password: formData.currentPassword,
           new_password: formData.newPassword,
           confirm_password: formData.confirmPassword,

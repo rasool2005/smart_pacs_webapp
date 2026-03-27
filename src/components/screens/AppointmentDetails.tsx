@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Calendar, Clock, User, FileText, Edit2, X, IdCard, StickyNote, Loader2, AlertCircle } from 'lucide-react';
+import { API_BASE_URL } from '../../config';
 
 export default function AppointmentDetails() {
   const navigate = useNavigate();
@@ -16,14 +17,18 @@ export default function AppointmentDetails() {
     const fetchStudyDetails = async () => {
       try {
         setLoading(true);
+        const userStr = localStorage.getItem('user');
+        const user = userStr ? JSON.parse(userStr) : null;
+        const userId = user?.user_id || user?.id || 1;
+
         // Using user-studies as a comprehensive fetch if a direct ID get isn't available
-        const response = await fetch('http://127.0.0.1:8000/api/user-studies/', {
+        const response = await fetch(`${API_BASE_URL}/user-studies/`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json'
           },
-          body: JSON.stringify({ user_id: 1 }) // Placeholder for logged-in user
+          body: JSON.stringify({ user_id: userId })
         });
 
         const text = await response.text();
